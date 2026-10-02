@@ -1,4 +1,3 @@
 # TP DevOps Correction Docker
-(this is now mine)
 
-Correction de la partie Docker du module DevOps. Amusez-vous bien avec GitHub Actions !
+1. Les testcontainers permettent de créer des vrais conteneurs docker et qui les détruisent automatiquement à la fin des tests
