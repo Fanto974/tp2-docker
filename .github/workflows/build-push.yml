@@ -1,0 +1,54 @@
+name: build and push docker image
+on:
+  workflow_run:
+    workflows: ["Test backend"]
+    types: [completed]
+    branch: [main]
+
+jobs:
+  build-and-push-docker-image:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+
+    runs-on: ubuntu-24.04
+
+    # steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to DockerHub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login --username ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+
+      - name: Build image and push backend
+        uses: docker/build-push-action@v6
+        with:
+          # relative path to the place where source code with Dockerfile is located
+          context:
+            ./simple-api
+          # Note: tags has to be all lower-case
+          tags: ${{secrets.DOCKERHUB_USERNAME}}/tp-devops-simple-api:latest
+          # build on feature branches, push only on main branch
+          push: true
+
+      - name: Build image and push database
+        # DO the same for database
+        uses: docker/build-push-action@v6
+        with:
+          context:
+            ./database
+          tags: ${{secrets.DOCKERHUB_USERNAME}}/tp-devops-database:latest
+          # build on feature branches, push only on main branch
+          push: true
+
+      - name: Build image and push httpd
+        # DO the same for httpd
+        uses: docker/build-push-action@v6
+        with:
+          context:
+            ./http-server
+          tags: ${{secrets.DOCKERHUB_USERNAME}}/tp-devops-http-server:latest
+          # build on feature branches, push only on main branch
+          push: true
+
