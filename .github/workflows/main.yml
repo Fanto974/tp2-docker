@@ -19,6 +19,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
+          java-version: '21'
 
       #finally build your app with the latest command
       - name: Build and test with Maven
