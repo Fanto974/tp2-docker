@@ -1,0 +1,23 @@
+# Used only by the CI (build-push.yml), on top of docker-compose.yaml:
+# runs the stack with the images pushed on Docker Hub instead of building them
+services:
+
+  database:
+    image: ${DOCKERHUB_USERNAME}/tp-devops-database:${TAG}
+    # The database is "healthy" once it accepts connections (after the init scripts)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U usr -d db"]
+      interval: 5s
+      retries: 20
+
+  simple-api:
+    image: ${DOCKERHUB_USERNAME}/tp-devops-simple-api:${TAG}
+    # Start the API only when the database is ready
+    depends_on:
+      database:
+        condition: service_healthy
+
+  httpd:
+    image: ${DOCKERHUB_USERNAME}/tp-devops-http-server:${TAG}
+    depends_on:
+      - simple-api

@@ -11,6 +11,9 @@ jobs:
     # Only if the tests passed
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
+    # Share the tag sha-xxxxxxx with the next jobs
+    outputs:
+      tag: ${{ steps.tags.outputs.tag }}
     steps:
       # Check out the commit that was tested (not the latest commit of main)
       - name: Checkout code
@@ -20,11 +23,13 @@ jobs:
 
       # TAG = sha-<7 chars>, and VERSION = X.Y.Z when the ref is a tag vX.Y.Z
       - name: Compute image tags
+        id: tags
         env:
           SHA: ${{ github.event.workflow_run.head_sha }}
           REF: ${{ github.event.workflow_run.head_branch }}
         run: |
           echo "TAG=sha-${SHA::7}" >> "$GITHUB_ENV"
+          echo "tag=sha-${SHA::7}" >> "$GITHUB_OUTPUT"
           if [[ "$REF" == v* ]]; then
             echo "VERSION=${REF#v}" >> "$GITHUB_ENV"
           fi
@@ -62,3 +67,82 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-http-server:${{ env.TAG }}
             ${{ env.VERSION && format('{0}/tp-devops-http-server:{1}', secrets.DOCKERHUB_USERNAME, env.VERSION) }}
+
+  # Run the whole stack with the new images and check that the API answers
+  smoke-test:
+    needs: build-and-push
+    runs-on: ubuntu-24.04
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      TAG: ${{ needs.build-and-push.outputs.tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      # docker-compose.ci.yaml replaces the builds by the images sha-xxxxxxx
+      - name: Start the stack
+        run: |
+          docker compose -f docker-compose.yaml -f docker-compose.ci.yaml pull
+          docker compose -f docker-compose.yaml -f docker-compose.ci.yaml up -d --no-build
+
+      # Call the API through httpd, retry every 5s for ~2 min while it starts
+      # --fail: any HTTP error (404, 500...) makes the step fail
+      - name: Test the API
+        run: curl --fail --retry 24 --retry-delay 5 --retry-all-errors http://localhost/departments/IRC/students
+
+      # Only when something failed: print the containers logs to understand why
+      - name: Show logs
+        if: failure()
+        run: docker compose -f docker-compose.yaml -f docker-compose.ci.yaml logs
+
+  # Smoke tests passed: the candidate becomes `latest` and `stable` (no rebuild, same image)
+  promote:
+    needs: [build-and-push, smoke-test]
+    runs-on: ubuntu-24.04
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      TAG: ${{ needs.build-and-push.outputs.tag }}
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Add the tags latest and stable to the tested images
+      - name: Tag images as latest and stable
+        run: |
+          docker buildx imagetools create -t "$DOCKERHUB_USERNAME/tp-devops-simple-api:latest" -t "$DOCKERHUB_USERNAME/tp-devops-simple-api:stable" "$DOCKERHUB_USERNAME/tp-devops-simple-api:$TAG"
+          docker buildx imagetools create -t "$DOCKERHUB_USERNAME/tp-devops-database:latest" -t "$DOCKERHUB_USERNAME/tp-devops-database:stable" "$DOCKERHUB_USERNAME/tp-devops-database:$TAG"
+          docker buildx imagetools create -t "$DOCKERHUB_USERNAME/tp-devops-http-server:latest" -t "$DOCKERHUB_USERNAME/tp-devops-http-server:stable" "$DOCKERHUB_USERNAME/tp-devops-http-server:$TAG"
+
+  # Smoke tests failed: put `latest` back on the last version that passed (`stable`)
+  rollback:
+    needs: [build-and-push, smoke-test]
+    # Only when the smoke tests failed (not when the build itself failed)
+    if: failure() && needs.smoke-test.result == 'failure'
+    runs-on: ubuntu-24.04
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      TAG: ${{ needs.build-and-push.outputs.tag }}
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Put latest back on stable
+        run: |
+          docker buildx imagetools create -t "$DOCKERHUB_USERNAME/tp-devops-simple-api:latest" "$DOCKERHUB_USERNAME/tp-devops-simple-api:stable"
+          docker buildx imagetools create -t "$DOCKERHUB_USERNAME/tp-devops-database:latest" "$DOCKERHUB_USERNAME/tp-devops-database:stable"
+          docker buildx imagetools create -t "$DOCKERHUB_USERNAME/tp-devops-http-server:latest" "$DOCKERHUB_USERNAME/tp-devops-http-server:stable"
+
+      # Message shown on the summary page of the run, in the Actions tab
+      - name: Write summary
+        run: |
+          echo "## Rollback" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Rejected version: \`$TAG\` (smoke tests failed)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Restored version: \`stable\` (last version that passed the smoke tests)" >> "$GITHUB_STEP_SUMMARY"
