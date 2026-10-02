@@ -1,54 +1,64 @@
-name: build and push docker image
+name: Build and push docker images
 on:
+  # Runs when "Test backend" finishes on main or on a vX.Y.Z tag
   workflow_run:
     workflows: ["Test backend"]
     types: [completed]
-    branch: [main]
+    branches: [main, 'v*']
 
 jobs:
-  build-and-push-docker-image:
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push'
-
+  build-and-push:
+    # Only if the tests passed
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
-
-    # steps to perform in job
     steps:
+      # Check out the commit that was tested (not the latest commit of main)
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Login to DockerHub
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login --username ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+      # TAG = sha-<7 chars>, and VERSION = X.Y.Z when the ref is a tag vX.Y.Z
+      - name: Compute image tags
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          REF: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          echo "TAG=sha-${SHA::7}" >> "$GITHUB_ENV"
+          if [[ "$REF" == v* ]]; then
+            echo "VERSION=${REF#v}" >> "$GITHUB_ENV"
+          fi
 
-      - name: Build image and push backend
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Each image is pushed with sha-xxxxxxx, plus X.Y.Z on a release (empty line otherwise, ignored)
+      - name: Build and push backend
         uses: docker/build-push-action@v6
         with:
-          # relative path to the place where source code with Dockerfile is located
-          context:
-            ./simple-api
-          # Note: tags has to be all lower-case
-          tags: ${{secrets.DOCKERHUB_USERNAME}}/tp-devops-simple-api:latest
-          # build on feature branches, push only on main branch
+          context: ./simple-api
           push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-simple-api:${{ env.TAG }}
+            ${{ env.VERSION && format('{0}/tp-devops-simple-api:{1}', secrets.DOCKERHUB_USERNAME, env.VERSION) }}
 
-      - name: Build image and push database
-        # DO the same for database
+      - name: Build and push database
         uses: docker/build-push-action@v6
         with:
-          context:
-            ./database
-          tags: ${{secrets.DOCKERHUB_USERNAME}}/tp-devops-database:latest
-          # build on feature branches, push only on main branch
+          context: ./database
           push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-database:${{ env.TAG }}
+            ${{ env.VERSION && format('{0}/tp-devops-database:{1}', secrets.DOCKERHUB_USERNAME, env.VERSION) }}
 
-      - name: Build image and push httpd
-        # DO the same for httpd
+      - name: Build and push httpd
         uses: docker/build-push-action@v6
         with:
-          context:
-            ./http-server
-          tags: ${{secrets.DOCKERHUB_USERNAME}}/tp-devops-http-server:latest
-          # build on feature branches, push only on main branch
+          context: ./http-server
           push: true
-
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-http-server:${{ env.TAG }}
+            ${{ env.VERSION && format('{0}/tp-devops-http-server:{1}', secrets.DOCKERHUB_USERNAME, env.VERSION) }}
