@@ -1,0 +1,14 @@
+---
+- name: Run HTTPD proxy
+  community.docker.docker_container:
+    name: "{{ proxy_container_name }}"
+    image: "{{ proxy_image }}"
+    pull: true
+    state: started
+    restart_policy: always
+    networks:
+      - name: "{{ network_name }}"
+    ports:
+      - "80:80"
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python

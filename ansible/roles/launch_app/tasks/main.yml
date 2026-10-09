@@ -1,0 +1,16 @@
+---
+- name: Run API
+  community.docker.docker_container:
+    name: "{{ app_container_name }}"
+    image: "{{ app_image }}"
+    pull: true
+    state: started
+    restart_policy: always
+    networks:
+      - name: "{{ network_name }}"
+    env:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://{{ db_container_name }}:5432/{{ db_name }}"
+      SPRING_DATASOURCE_USERNAME: "{{ db_user }}"
+      SPRING_DATASOURCE_PASSWORD: "{{ db_password }}"
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
