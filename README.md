@@ -40,3 +40,5 @@ Crée le réseau Docker partagé, qui permet aux conteneurs de se joindre par le
 | `state: started` | Garantit que le conteneur existe et tourne. |
 | `restart_policy: always` | Redémarrage automatique. |
 | `networks` | Rattache le conteneur au réseau `{{ network_name }}`. |
+
+### Est-il sûr de déployer automatiquement chaque nouvelle image ?
