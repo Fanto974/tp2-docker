@@ -149,7 +149,7 @@ jobs:
 
 
   deploy:
-    needs: [build-and-push-docker-image, promote]
+    needs: [build-and-push, promote]
     runs-on: ubuntu-22.04
 
     steps:
