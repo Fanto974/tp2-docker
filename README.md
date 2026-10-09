@@ -42,3 +42,5 @@ Crée le réseau Docker partagé, qui permet aux conteneurs de se joindre par le
 | `networks` | Rattache le conteneur au réseau `{{ network_name }}`. |
 
 ### Est-il sûr de déployer automatiquement chaque nouvelle image ?
+Non car il n'y aucune validation humaine, toute image poussée part en prod directementy compris un bug qui passe les tests
+Pour sécuriser tout ca il faudrai déployer seulement après des tests réussis et relus avec validation manuelle.

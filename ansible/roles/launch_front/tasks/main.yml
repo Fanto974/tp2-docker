@@ -1,0 +1,11 @@
+- name: Run front
+  community.docker.docker_container:
+    name: "{{ front_container_name }}"
+    image: "{{ front_image }}"
+    pull: true
+    state: started
+    restart_policy: always
+    networks:
+      - name: "{{ network_name }}"
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python

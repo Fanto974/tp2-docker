@@ -14,6 +14,9 @@
     app_container_name: simple-api
     app_image: fanto974/tp-devops-simple-api:latest
 
+    front_container_name: front
+    front_image: tonuser/tp-devops-front:latest    
+
     proxy_container_name: httpd
     proxy_image: fanto974/tp-devops-http-server:latest
 
@@ -22,4 +25,5 @@
     - create_network
     - launch_database
     - launch_app
+    - launch_front
     - launch_proxy

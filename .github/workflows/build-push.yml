@@ -59,6 +59,13 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-database:${{ env.TAG }}
             ${{ env.VERSION && format('{0}/tp-devops-database:{1}', secrets.DOCKERHUB_USERNAME, env.VERSION) }}
 
+      - name: Build image and push front
+        uses: docker/build-push-action@v6
+        with:
+          context: ./devops-front
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-front:latest
+          push: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Build and push httpd
         uses: docker/build-push-action@v6
         with:
