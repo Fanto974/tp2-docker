@@ -148,10 +148,9 @@ jobs:
           echo "- Restored version: \`stable\` (last version that passed the smoke tests)" >> "$GITHUB_STEP_SUMMARY"
 
 
-    deploy:
-    needs: build-and-push-docker-image
+  deploy:
+    needs: [build-and-push-docker-image, promote]
     runs-on: ubuntu-22.04
-    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
