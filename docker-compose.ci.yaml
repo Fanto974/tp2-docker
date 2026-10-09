@@ -17,6 +17,9 @@ services:
       database:
         condition: service_healthy
 
+  front:
+    image: ${DOCKERHUB_USERNAME}/tp-devops-front:${TAG}
+
   httpd:
     image: ${DOCKERHUB_USERNAME}/tp-devops-http-server:${TAG}
     depends_on:
