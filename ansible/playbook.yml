@@ -2,14 +2,16 @@
   gather_facts: true
   become: true
 
+  vars_files:
+    - vars/secrets.yml
+
   vars:
     network_name: app-network
 
     db_container_name: database
     db_image: fanto974/tp-devops-database:latest
     db_name: db
-    db_user: usr
-    db_password: pwd
+
 
     app_container_name: simple-api
     app_image: fanto974/tp-devops-simple-api:latest

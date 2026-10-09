@@ -170,17 +170,32 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Install Ansible
-        run: pipx install --include-deps ansible
+      - name: Build Ansible image
+        run: docker build -t ansible-runner ./ansible
 
-      - name: Set up SSH key
+      - name: Set up SSH key and vault password
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > "$RUNNER_TEMP/vault_pass"
+          chmod 600 "$RUNNER_TEMP/vault_pass"
 
-      - name: Deploy with Ansible
-        working-directory: ansible
-        run: ansible-playbook -i inventories/setup.yml playbook.yml -e ansible_ssh_private_key_file=$HOME/.ssh/id_rsa
+      - name: Deploy with Ansible (in Docker)
+        run: |
+          docker run --rm \
+            -v "$PWD/ansible:/ansible" \
+            -v "$HOME/.ssh:/root/.ssh:ro" \
+            -v "$RUNNER_TEMP/vault_pass:/vault_pass:ro" \
+            ansible-runner \
+            ansible-playbook -i inventories/setup.yml playbook.yml \
+              -e ansible_ssh_private_key_file=/root/.ssh/id_rsa \
+              --vault-password-file /vault_pass
+
+      - name: Clean up secrets
+        if: always()
+        run: rm -f ~/.ssh/id_rsa "$RUNNER_TEMP/vault_pass"
